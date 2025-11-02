@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Skiri",
+    "slug": "skiri-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.skiri.app"
+    },
+    "android": {
+      "package": "com.skiri.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Skiri to access your camera to take skin photos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Skiri to access your photos."
+        }
+      ]
+    ],
+    "scheme": "skiri"
+  }
+}
+
