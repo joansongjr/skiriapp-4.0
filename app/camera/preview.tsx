@@ -36,22 +36,22 @@ export default function CameraPreviewScreen() {
   
   const onConfirm = async () => {
     if (!uri) return;
-    
+
     setUploading(true);
     setError('');
     
     try {
-      const now = new Date();
-      const dateISO = now.toISOString().slice(0, 10);
-      const localId = String(Date.now());
+    const now = new Date();
+    const dateISO = now.toISOString().slice(0, 10);
+    const localId = String(Date.now());
 
       // 1) 先保存到本地
-      addPhoto({ id: localId, uri, dateISO, createdAt: Date.now() });
+    addPhoto({ id: localId, uri, dateISO, createdAt: Date.now() });
 
       // 2) 确保用户登录（匿名也可以）
       setUploadProgress('Logging in...');
       console.log('[upload] 检查用户登录状态...');
-      
+
       if (!auth.currentUser) {
         console.log('[upload] 当前未登录，开始匿名登录...');
         const result = await signInAnonymously();
@@ -112,7 +112,7 @@ export default function CameraPreviewScreen() {
       } else {
         throw new Error('AI analysis timeout or failed');
       }
-      
+
     } catch (err: any) {
       console.error('❌ 上传或分析失败:', err);
       setError(err.message || 'Upload failed');
@@ -192,22 +192,22 @@ export default function CameraPreviewScreen() {
                 </View>
               ) : (
                 <>
-                  <View style={styles.tipBox}>
-                    <Text style={styles.tipText}>
-                      Face: make sure it's clear and well lit.
-                    </Text>
-                    <Text style={styles.tipText}>
-                      Others: ensure good lighting and focus.
-                    </Text>
-                  </View>
+              <View style={styles.tipBox}>
+                <Text style={styles.tipText}>
+                  Face: make sure it's clear and well lit.
+                </Text>
+                <Text style={styles.tipText}>
+                  Others: ensure good lighting and focus.
+                </Text>
+              </View>
 
-                  <TouchableOpacity style={styles.retakeBtn} onPress={onRetake}>
-                    <Text style={styles.retakeText}>Retake</Text>
-                  </TouchableOpacity>
+              <TouchableOpacity style={styles.retakeBtn} onPress={onRetake}>
+                <Text style={styles.retakeText}>Retake</Text>
+              </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm}>
-                    <Text style={styles.confirmText}>Confirm & Analyze</Text>
-                  </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm}>
+                <Text style={styles.confirmText}>Confirm & Analyze</Text>
+              </TouchableOpacity>
                 </>
               )}
             </View>

@@ -85,32 +85,34 @@ export const analyzeSkinPhoto = functions.firestore
  */
 async function analyzeSkinWithGemini(imageUrl: string) {
   const prompt = `
-你是一个专业的皮肤分析AI。请仔细观察这张皮肤照片，并给出以下维度的评分（0-100分）：
+You are a professional skin analysis AI. Please carefully observe this skin photo and provide scores (0-100) for the following dimensions.
 
-1. overall（整体评分）：皮肤的总体健康状况
-2. acne（痤疮/痘痘）：痤疮的严重程度（0=完全没有，100=非常严重）
-3. redness（红肿）：皮肤发红/炎症的程度（0=完全没有，100=非常严重）
-4. darkCircles（黑眼圈）：黑眼圈的严重程度（0=完全没有，100=非常严重）
-5. wrinkles（皱纹）：皱纹的明显程度（0=完全没有，100=非常明显）
-6. complexion（肤色均匀度）：肤色的均匀程度（0=非常不均匀，100=非常均匀）
+Important: All scores follow the principle "higher score = better skin condition".
 
-请只返回 JSON 格式的结果，不要包含任何其他文字说明。
+1. overall: Overall skin health (0=very poor, 100=excellent)
+2. acne: Skin smoothness (0=severe acne, 100=no acne, smooth skin)
+3. redness: Skin calmness (0=severe redness/inflammation, 100=no redness, calm skin)
+4. darkCircles: Eye area health (0=severe dark circles, 100=no dark circles)
+5. wrinkles: Skin firmness (0=very wrinkled, 100=no wrinkles, firm skin)
+6. complexion: Skin tone evenness (0=very uneven, 100=very even)
 
-格式示例：
+Please return only JSON format result, no other text.
+
+Format example:
 {
   "overall": 75,
-  "acne": 20,
-  "redness": 15,
-  "darkCircles": 30,
-  "wrinkles": 10,
+  "acne": 85,
+  "redness": 80,
+  "darkCircles": 70,
+  "wrinkles": 90,
   "complexion": 80
 }
 `.trim();
 
   try {
-    // 使用 Gemini Pro Vision 模型
+    // 使用 Gemini 2.5 Flash 模型（支持视觉和文本）
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash", // 或 "gemini-1.5-pro" (更强但更贵)
+      model: "gemini-2.5-flash", // 新的 2.5 系列模型
     });
 
     // 1. 下载图片数据

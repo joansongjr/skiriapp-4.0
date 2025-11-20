@@ -18,17 +18,17 @@ export default function CameraAnalysis() {
   const params = useLocalSearchParams();
   const { uri, photoId, analysis: analysisStr } = params;
   
-  // 解析 AI 分析结果
+  // Parse AI analysis results
   const analysis = useMemo<AnalysisResult>(() => {
     try {
       if (analysisStr && typeof analysisStr === 'string') {
         return JSON.parse(analysisStr);
       }
     } catch (e) {
-      console.error('解析 AI 结果失败:', e);
+      console.error('Failed to parse AI results:', e);
     }
     
-    // 默认值（如果解析失败）
+    // Default values (if parsing fails)
     return {
       overall: 0,
       acne: 0,
@@ -43,7 +43,7 @@ export default function CameraAnalysis() {
     router.push("/camera/triggers");
   };
   
-  // 获取得分最高的3个需要改善的问题
+  // Get the 3 lowest-scoring areas that need improvement (lower score = more severe issue)
   const getTopConcerns = (data: AnalysisResult): string[] => {
     const concerns = [
       { name: 'redness', value: data.redness },
@@ -52,17 +52,17 @@ export default function CameraAnalysis() {
       { name: 'wrinkles', value: data.wrinkles },
     ];
     
-    // 分数越高越需要关注，筛选出 > 20 的问题
+    // Lower scores need more attention, filter out scores < 70
     return concerns
-      .filter(c => c.value > 20)
-      .sort((a, b) => b.value - a.value)
+      .filter(c => c.value < 70)
+      .sort((a, b) => a.value - b.value) // Sort low to high
       .slice(0, 3)
       .map(c => c.name);
   };
 
   return (
     <View style={styles.container}>
-      {/* 照片区域 */}
+      {/* Image area */}
       <View style={styles.imageWrap}>
         {uri ? (
           <Image source={{ uri: uri as string }} style={styles.image} />
@@ -72,20 +72,16 @@ export default function CameraAnalysis() {
           </View>
         )}
 
-        {/* 返回按钮 */}
+        {/* Back button */}
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
       </View>
 
-      {/* 下半部分内容 */}
-      <ScrollView
-        style={styles.bottom}
-        contentContainerStyle={{ paddingBottom: 60 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* 五个结果卡 - 显示真实的 AI 分析结果 */}
+      {/* Bottom content - no scroll */}
+      <View style={styles.bottom}>
+        {/* Five result cards - showing real AI analysis results */}
         <View style={styles.scoreCard}>
           <View style={styles.metric}>
             <RingGauge value={analysis.redness} color="#fca5a5" gapAngle={70} thickness={12} />
@@ -105,31 +101,35 @@ export default function CameraAnalysis() {
           </View>
           <View style={styles.metric}>
             <RingGauge value={analysis.complexion} color="#fde68a" gapAngle={70} thickness={12} />
-            <Text style={styles.metricLabel}>complexion</Text>
+            <Text style={styles.metricLabel}>skin{"\n"}tone</Text>
           </View>
         </View>
 
-        {/* 文本描述 - 根据 AI 结果生成 */}
+        {/* Score explanation */}
+        <View style={styles.scoreNote}>
+          <Text style={styles.scoreNoteText}>
+            ✨ Higher score = Better skin condition
+          </Text>
+        </View>
+
+        {/* Text description - based on AI results */}
         <View style={styles.textBlock}>
           <Text style={styles.paragraph}>
             Overall skin score: {analysis.overall}/100{"\n"}
             {analysis.overall >= 80 ? "Your skin is in great condition! 🎉" : 
              analysis.overall >= 60 ? "Your skin looks good with room for improvement." :
              "Let's work on improving your skin health together."}
-            {"\n\n"}
             {getTopConcerns(analysis).length > 0 && (
-              `Focus areas: ${getTopConcerns(analysis).join(", ")}.`
+              `\n\nFocus areas: ${getTopConcerns(analysis).join(", ")}`
             )}
-            {"\n"}
-            Let&apos;s track it and see changes every day.
           </Text>
         </View>
 
-        {/* 底部按钮 */}
+        {/* Bottom button */}
         <TouchableOpacity style={styles.btn} onPress={goNext}>
           <Text style={styles.btnText}>Continue to Record</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -178,16 +178,18 @@ const styles = StyleSheet.create({
     marginTop: -20,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingTop: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
+    justifyContent: "space-between",
   },
 
   scoreCard: {
     flexDirection: "row",
     justifyContent: "space-between",
     backgroundColor: "#fff",
-    borderRadius: 24,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     marginHorizontal: 16,
     shadowColor: "#000",
     shadowOpacity: 0.06,
@@ -195,27 +197,44 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 2,
   },
-  metric: { alignItems: "center", width: 64 },
-  metricLabel: { fontSize: 12, color: "#6b7280", fontWeight: "600", textAlign: "center" },
+  metric: { alignItems: "center", width: 60 },
+  metricLabel: { fontSize: 12, color: "#6b7280", fontWeight: "600", textAlign: "center", marginTop: 4 },
+
+  scoreNote: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  scoreNoteText: {
+    fontSize: 13,
+    color: "#166534",
+    textAlign: "center",
+    fontWeight: "600",
+  },
 
   textBlock: {
     alignItems: "center",
-    marginTop: 24,
-    paddingHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 20,
   },
   paragraph: {
     textAlign: "center",
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 22,
     color: "#111",
   },
 
   btn: {
     backgroundColor: MINT,
     borderRadius: 30,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: "center",
-    marginTop: 20,
+    marginTop: 12,
     marginHorizontal: 32,
   },
   btnText: {
