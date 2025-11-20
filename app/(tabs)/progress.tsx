@@ -206,9 +206,9 @@ const styles = StyleSheet.create({
   chartSub: { fontSize: 14, color: UI.sub },
 
   sectionTitle: { fontSize: 18, fontWeight: "800", color: UI.text, marginTop: 22, marginBottom: 12 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   gridItem: {
-    width: "31.5%",
+    width: "31%",
     aspectRatio: 1,
     borderRadius: 18,
     backgroundColor: "#E6EBF1",

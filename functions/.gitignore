@@ -1,0 +1,36 @@
+# Compiled JavaScript files
+lib/
+*.js
+*.js.map
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Node.js dependencies
+node_modules/
+
+# Firebase cache
+.firebase/
+
+# Firebase config file
+.runtimeconfig.json
+
+# Uncomment this if you'd like others to create their own Firebase project
+# .firebaserc
+
+# Debug logs
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+

@@ -13,7 +13,7 @@
 ## 项目结构
 
 ```
-skinote 4.0/
+skiri/
 ├── app/                    # 路由页面
 │   ├── _layout.tsx        # 根布局
 │   └── index.tsx          # 首页（空白）

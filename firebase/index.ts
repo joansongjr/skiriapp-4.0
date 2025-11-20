@@ -1,28 +1,63 @@
-import { initializeApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// firebase/index.ts
+// Firebase 主入口 - 导出所有 Firebase 相关功能
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCfP_BzfwUS2NsTmcKktdNU9401UXrZ8EI",
-  authDomain: "skiri2.firebaseapp.com",
-  projectId: "skiri2",
-  storageBucket: "skiri2.firebasestorage.app",
-  messagingSenderId: "138416525125",
-  appId: "1:138416525125:web:e653f2ad65a9fedf20782c",
-  measurementId: "G-NQ6GNKR41Y"
-};
+// Firebase 配置和服务
+export { auth, db, storage } from './config';
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// 认证服务
+export {
+  registerUser,
+  loginUser,
+  signInAnonymously,
+  logoutUser,
+  onAuthStateChange,
+  updateUserProfile as updateAuthUserProfile,
+  deleteUserAccount
+} from './auth';
 
-// Initialize services with React Native persistence
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+// Firestore 服务
+export {
+  // User Profile
+  createUserProfile,
+  getUserProfile,
+  updateUserProfile,
+  // Skin Analysis
+  createSkinAnalysis,
+  getUserAnalyses,
+  getAnalysisById,
+  subscribeToUserAnalyses,
+  // Survey Data
+  saveSurveyData,
+  getSurveyData,
+  // Photos (existing)
+  createPhotoDoc,
+  enforceDailyCap,
+  getRecentPhotos,
+  getDailyPhotos,
+  deletePhotoDoc,
+  getPhotosByDateRange,
+  savePhotoWithAutoCleanup,
+  // Photos (sync)
+  getPhotosAfter,
+  getPhotosBefore
+} from './firestore';
 
-export default app;
+// Firestore Types
+export type { PhotoDoc } from './firestore';
 
+// Storage 服务
+export {
+  uploadPhoto,
+  uploadPhotoBase64,
+  deletePhoto,
+  uploadPhotoBatch
+} from './storage';
+
+// Storage Types
+export type { UploadProgress } from './storage';
+
+// Context 和 Hooks
+export {
+  AuthProvider,
+  useAuth
+} from './context';

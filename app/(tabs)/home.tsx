@@ -1,19 +1,21 @@
 // app/(tabs)/home.tsx
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
-  ScrollView,
-  Image,
   FlatList,
+  Image,
+  RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useAppStore } from '../../store';
+import { useAppStore, getPhotosArray } from '../../store';
+import { syncNewPhotos, loadMorePhotos, firstTimeSync } from '@/lib/syncManager';
 
 // 与 triggers.tsx 对齐：Home 仅需要读取当天/历史已保存的 Selected 标签
 type TagItem = { label: string }; // 现在只用坏标签一种样式，简化为只读 label
@@ -95,10 +97,34 @@ const RecentItem = ({
 export default function HomeScreen() {
   const router = useRouter();
   const [dayList, setDayList] = useState<Array<{ key: string; items: TagItem[] }>>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
   
+  // Store 状态
   const dailyPhotos = useAppStore(state => state.dailyPhotos);
+  const syncStatus = useAppStore(state => state.syncStatus);
+  const hasMoreHistory = useAppStore(state => state.hasMoreHistory);
+  const lastSyncTime = useAppStore(state => state.lastSyncTime);
+  const mergeSyncedPhotos = useAppStore(state => state.mergeSyncedPhotos);
+  const appendOlderPhotos = useAppStore(state => state.appendOlderPhotos);
+  const setSyncStatus = useAppStore(state => state.setSyncStatus);
+  const setHasMoreHistory = useAppStore(state => state.setHasMoreHistory);
+  const updateLastSyncTime = useAppStore(state => state.updateLastSyncTime);
 
-  // 进入页面/获得焦点时，读取最近的日记录
+  // 获取所有照片的数组（按时间倒序）
+  const photosArray = getPhotosArray(dailyPhotos);
+  
+  // 按日期分组
+  const photosByDate = Object.keys(dailyPhotos)
+    .sort((a, b) => +parseDateKey(b) - +parseDateKey(a))
+    .map(dateKey => ({
+      dateKey,
+      photos: dailyPhotos[dateKey],
+      tags: dayList.find(d => d.key === dateKey)?.items || [],
+    }));
+
+  // 进入页面时，读取标签记录
   useFocusEffect(
     useCallback(() => {
       (async () => {
@@ -112,13 +138,103 @@ export default function HomeScreen() {
     }, [])
   );
 
-  return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+  // 首次加载或24小时自动同步
+  useEffect(() => {
+    (async () => {
+      // 如果从未同步过，执行首次同步
+      if (!lastSyncTime || lastSyncTime === 0) {
+        console.log('[Home] 首次同步');
+        setSyncStatus('syncing');
+        const result = await firstTimeSync();
+        
+        if (result.success && result.newPhotos) {
+          mergeSyncedPhotos(result.newPhotos);
+          updateLastSyncTime(Date.now());
+          setSyncMessage(`已加载 ${result.newPhotos.length} 张照片`);
+          setTimeout(() => setSyncMessage(''), 3000);
+        }
+        
+        setSyncStatus('idle');
+        return;
+      }
+      
+      // 24小时自动同步（不强制，会检查WiFi）
+      const result = await syncNewPhotos({ forceSync: false, checkWiFi: true });
+      
+      if (result.success && result.newPhotos && result.newPhotos.length > 0) {
+        mergeSyncedPhotos(result.newPhotos);
+        updateLastSyncTime(Date.now());
+        setSyncMessage(`发现 ${result.newPhotos.length} 张新照片`);
+        setTimeout(() => setSyncMessage(''), 3000);
+      } else if (result.skipped) {
+        console.log('[Home] 同步跳过:', result.reason);
+      }
+    })();
+  }, []);
+
+  // 下拉刷新
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setSyncMessage('');
+    
+    // 强制同步（忽略时间间隔和WiFi检查）
+    const result = await syncNewPhotos({ forceSync: true, checkWiFi: false });
+    
+    if (result.success && result.newPhotos) {
+      mergeSyncedPhotos(result.newPhotos);
+      updateLastSyncTime(Date.now());
+      
+      if (result.newPhotos.length > 0) {
+        setSyncMessage(`已同步 ${result.newPhotos.length} 张新照片`);
+      } else {
+        setSyncMessage('已是最新');
+      }
+    } else if (result.error) {
+      setSyncMessage(result.error);
+    }
+    
+    setTimeout(() => setSyncMessage(''), 3000);
+    setRefreshing(false);
+  }, [mergeSyncedPhotos, updateLastSyncTime]);
+
+  // 滚动到底部，加载更多
+  const onLoadMore = useCallback(async () => {
+    if (loadingMore || !hasMoreHistory) return;
+    
+    // 获取最旧的照片的时间戳
+    const oldestPhoto = photosArray[photosArray.length - 1];
+    if (!oldestPhoto) {
+      setHasMoreHistory(false);
+      return;
+    }
+    
+    console.log('[Home] 加载更多历史照片，最旧照片时间:', new Date(oldestPhoto.createdAt).toISOString());
+    
+    setLoadingMore(true);
+    setSyncStatus('loading_more');
+    
+    const result = await loadMorePhotos(oldestPhoto.createdAt);
+    
+    if (result.success && result.photos) {
+      appendOlderPhotos(result.photos);
+      setHasMoreHistory(result.hasMore || false);
+      
+      if (result.photos.length > 0) {
+        setSyncMessage(`已加载 ${result.photos.length} 张历史照片`);
+        setTimeout(() => setSyncMessage(''), 2000);
+      }
+    } else if (result.error) {
+      setSyncMessage(result.error);
+      setTimeout(() => setSyncMessage(''), 2000);
+    }
+    
+    setLoadingMore(false);
+    setSyncStatus('idle');
+  }, [loadingMore, hasMoreHistory, photosArray, appendOlderPhotos, setHasMoreHistory]);
+
+  // 渲染列表头部
+  const renderHeader = () => (
+    <>
         {/* App Title + Bell */}
         <View style={styles.titleRow}>
           <Text style={styles.appTitle}>skiri</Text>
@@ -126,6 +242,13 @@ export default function HomeScreen() {
             <Ionicons name="notifications-outline" size={24} color="#000" />
           </TouchableOpacity>
         </View>
+
+      {/* 同步消息提示 */}
+      {syncMessage ? (
+        <View style={styles.syncMessage}>
+          <Text style={styles.syncMessageText}>{syncMessage}</Text>
+        </View>
+      ) : null}
 
         {/* Card: Today's Photo */}
         <View style={styles.card}>
@@ -175,23 +298,73 @@ export default function HomeScreen() {
         {/* Recently Upload */}
         <Text style={styles.sectionTitle}>Recently Upload</Text>
 
-        {dayList.length === 0 ? (
+      {photosByDate.length === 0 && (
           <Text style={{ color: "#6b7280", marginBottom: 16 }}>
-            No records yet. Go to Camera → Analysis → Triggers to add today's tags.
+          No records yet. Pull down to sync from cloud or take a photo.
           </Text>
-        ) : (
-          dayList.slice(0, 7).map((row, idx, arr) => {
-            const dayPhotos = dailyPhotos[row.key] || [];
-            const latestPhoto = dayPhotos[0]; // 显示当天最新的照片
+      )}
+    </>
+  );
+
+  // 渲染每一天的照片
+  const renderItem = ({ item, index }: { item: typeof photosByDate[0]; index: number }) => {
+    const latestPhoto = item.photos[0];
+    
+    return (
+      <View>
+        <RecentItem 
+          dayKey={item.dateKey} 
+          items={item.tags} 
+          photoUri={latestPhoto?.uri} 
+        />
+        {index < photosByDate.length - 1 && <View style={styles.divider} />}
+      </View>
+    );
+  };
+
+  // 渲染底部加载更多
+  const renderFooter = () => {
+    if (!hasMoreHistory) {
+      return (
+        <View style={styles.footerText}>
+          <Text style={{ color: "#9ca3af", fontSize: 14 }}>已加载全部历史照片</Text>
+        </View>
+      );
+    }
+    
+    if (loadingMore) {
             return (
-              <View key={row.key}>
-                <RecentItem dayKey={row.key} items={row.items} photoUri={latestPhoto?.uri} />
-                {idx < Math.min(arr.length, 7) - 1 && <View style={styles.divider} />}
+        <View style={styles.footerLoading}>
+          <ActivityIndicator color="#18e4aa" />
+          <Text style={{ color: "#6b7280", marginLeft: 8 }}>加载更多...</Text>
               </View>
             );
-          })
-        )}
-      </ScrollView>
+    }
+    
+    return <View style={{ height: 20 }} />;
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <FlatList
+        data={photosByDate}
+        keyExtractor={(item) => item.dateKey}
+        renderItem={renderItem}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#18e4aa"
+            colors={['#18e4aa']}
+          />
+        }
+        onEndReached={onLoadMore}
+        onEndReachedThreshold={0.5}
+      />
     </SafeAreaView>
   );
 }
@@ -209,6 +382,21 @@ const styles = StyleSheet.create({
   },
   appTitle: { fontSize: 36, fontWeight: "700", color: "#000" },
   bellTouch: { padding: 8 },
+
+  // 同步消息提示
+  syncMessage: {
+    backgroundColor: "#18e4aa",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  syncMessageText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#000",
+  },
 
   card: {
     backgroundColor: "#fff", borderRadius: 20, padding: 20, marginBottom: 16,
@@ -245,4 +433,16 @@ const styles = StyleSheet.create({
   pillBad: { backgroundColor: "#ef444430" },
   pillText: { fontSize: 13, fontWeight: "600" },
   pillTextBad: { color: "#7f1d1d" },
+
+  // 底部加载状态
+  footerLoading: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 20,
+  },
+  footerText: {
+    alignItems: "center",
+    paddingVertical: 20,
+  },
 });

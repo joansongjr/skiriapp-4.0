@@ -1,15 +1,63 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import RingGauge from "../../components/ui/RingGauge";
 
+type AnalysisResult = {
+  overall: number;
+  acne: number;
+  redness: number;
+  darkCircles: number;
+  wrinkles: number;
+  complexion: number;
+};
+
 export default function CameraAnalysis() {
   const router = useRouter();
-  const { uri } = useLocalSearchParams(); // 从 preview 传过来的照片地址
+  const params = useLocalSearchParams();
+  const { uri, photoId, analysis: analysisStr } = params;
+  
+  // 解析 AI 分析结果
+  const analysis = useMemo<AnalysisResult>(() => {
+    try {
+      if (analysisStr && typeof analysisStr === 'string') {
+        return JSON.parse(analysisStr);
+      }
+    } catch (e) {
+      console.error('解析 AI 结果失败:', e);
+    }
+    
+    // 默认值（如果解析失败）
+    return {
+      overall: 0,
+      acne: 0,
+      redness: 0,
+      darkCircles: 0,
+      wrinkles: 0,
+      complexion: 0,
+    };
+  }, [analysisStr]);
 
   const goNext = () => {
     router.push("/camera/triggers");
+  };
+  
+  // 获取得分最高的3个需要改善的问题
+  const getTopConcerns = (data: AnalysisResult): string[] => {
+    const concerns = [
+      { name: 'redness', value: data.redness },
+      { name: 'acne', value: data.acne },
+      { name: 'dark circles', value: data.darkCircles },
+      { name: 'wrinkles', value: data.wrinkles },
+    ];
+    
+    // 分数越高越需要关注，筛选出 > 20 的问题
+    return concerns
+      .filter(c => c.value > 20)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 3)
+      .map(c => c.name);
   };
 
   return (
@@ -37,36 +85,42 @@ export default function CameraAnalysis() {
         contentContainerStyle={{ paddingBottom: 60 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* 五个结果卡 */}
+        {/* 五个结果卡 - 显示真实的 AI 分析结果 */}
         <View style={styles.scoreCard}>
           <View style={styles.metric}>
-            <RingGauge value={48} color="#fca5a5" gapAngle={70} thickness={12} />
+            <RingGauge value={analysis.redness} color="#fca5a5" gapAngle={70} thickness={12} />
             <Text style={styles.metricLabel}>redness</Text>
           </View>
           <View style={styles.metric}>
-            <RingGauge value={2} color="#86efac" gapAngle={70} thickness={12} />
+            <RingGauge value={analysis.acne} color="#86efac" gapAngle={70} thickness={12} />
             <Text style={styles.metricLabel}>acne</Text>
           </View>
           <View style={styles.metric}>
-            <RingGauge value={13} color="#60a5fa" gapAngle={70} thickness={12} />
+            <RingGauge value={analysis.darkCircles} color="#60a5fa" gapAngle={70} thickness={12} />
             <Text style={styles.metricLabel}>dark{"\n"}circles</Text>
           </View>
           <View style={styles.metric}>
-            <RingGauge value={9} color="#bae6fd" gapAngle={70} thickness={12} />
+            <RingGauge value={analysis.wrinkles} color="#bae6fd" gapAngle={70} thickness={12} />
             <Text style={styles.metricLabel}>wrinkles</Text>
           </View>
           <View style={styles.metric}>
-            <RingGauge value={34} color="#fde68a" gapAngle={70} thickness={12} />
+            <RingGauge value={analysis.complexion} color="#fde68a" gapAngle={70} thickness={12} />
             <Text style={styles.metricLabel}>complexion</Text>
           </View>
         </View>
 
-        {/* 文本描述 */}
+        {/* 文本描述 - 根据 AI 结果生成 */}
         <View style={styles.textBlock}>
           <Text style={styles.paragraph}>
-            today is the 1 day you use skiri,{"\n"}
-            your skin is calm and clear.{"\n"}
-            Fix: redness / complexion / dark circles.{"\n"}
+            Overall skin score: {analysis.overall}/100{"\n"}
+            {analysis.overall >= 80 ? "Your skin is in great condition! 🎉" : 
+             analysis.overall >= 60 ? "Your skin looks good with room for improvement." :
+             "Let's work on improving your skin health together."}
+            {"\n\n"}
+            {getTopConcerns(analysis).length > 0 && (
+              `Focus areas: ${getTopConcerns(analysis).join(", ")}.`
+            )}
+            {"\n"}
             Let&apos;s track it and see changes every day.
           </Text>
         </View>

@@ -2,27 +2,55 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PhotoDoc } from '@/firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 
 export type PhotoItem = {
   id: string;
   uri: string;
   dateISO: string;   // 'YYYY-MM-DD'
   createdAt: number; // timestamp
+  cloudUrl?: string; // 云端URL（如果已上传）
+  uploaded?: boolean; // 是否已上传到云端
 };
 
 const MAX_PHOTOS_PER_DAY = 3;
 
+type SyncStatus = 'idle' | 'syncing' | 'loading_more' | 'error';
+
 type StoreState = {
-  // 每天最多保留3张照片
+  // 本地照片（用户拍的照片）
   dailyPhotos: Record<string, PhotoItem[]>; // { '2025-11-02': [photo1, photo2, photo3] }
+  
+  // 同步相关状态
+  syncStatus: SyncStatus;
+  lastSyncTime: number;  // 上次同步时间戳
+  hasMoreHistory: boolean;  // 是否还有更早的照片可以加载
+  
+  // 照片操作
   addPhoto: (p: PhotoItem) => void;
   removePhoto: (id: string) => void;
+  updatePhotoUri?: (id: string, newUri: string) => void;
+  
+  // 同步操作
+  setSyncStatus: (status: SyncStatus) => void;
+  mergeSyncedPhotos: (photos: PhotoDoc[]) => void;  // 合并同步的照片（用于增量同步）
+  appendOlderPhotos: (photos: PhotoDoc[]) => void;  // 追加更早的照片（用于分页加载）
+  setHasMoreHistory: (hasMore: boolean) => void;
+  updateLastSyncTime: (time: number) => void;
 };
 
 export const useAppStore = create<StoreState>()(
   persist(
     (set, get) => ({
+      // 初始状态
       dailyPhotos: {},
+      syncStatus: 'idle',
+      lastSyncTime: 0,
+      hasMoreHistory: true,
+      
+      // ========== 照片操作 ==========
+      
       // 添加照片：每天最多3张，超过则删除最旧的
       addPhoto: (p) => {
         const current = get().dailyPhotos;
@@ -47,6 +75,7 @@ export const useAppStore = create<StoreState>()(
           dailyPhotos: { ...current, [p.dateISO]: limited } 
         });
       },
+      
       // 删除指定照片
       removePhoto: (id) => {
         const current = get().dailyPhotos;
@@ -60,6 +89,99 @@ export const useAppStore = create<StoreState>()(
         });
         
         set({ dailyPhotos: updated });
+      },
+      
+      // 更新照片URI（上传成功后替换为Firebase URL）
+      updatePhotoUri: (id, newUri) => {
+        const current = get().dailyPhotos;
+        const updated: Record<string, PhotoItem[]> = {};
+        
+        Object.entries(current).forEach(([date, photos]) => {
+          updated[date] = photos.map(p => 
+            p.id === id ? { ...p, uri: newUri, cloudUrl: newUri, uploaded: true } : p
+          );
+        });
+        
+        set({ dailyPhotos: updated });
+      },
+      
+      // ========== 同步操作 ==========
+      
+      // 设置同步状态
+      setSyncStatus: (status) => {
+        set({ syncStatus: status });
+      },
+      
+      // 合并同步的照片（用于增量同步、下拉刷新）
+      mergeSyncedPhotos: (photos) => {
+        const current = get().dailyPhotos;
+        const updated = { ...current };
+        
+        // 将 PhotoDoc 转换为 PhotoItem 并合并
+        photos.forEach(photoDoc => {
+          const photoItem: PhotoItem = {
+            id: photoDoc.id,
+            uri: photoDoc.url,  // 云端URL
+            cloudUrl: photoDoc.url,
+            dateISO: photoDoc.dateISO,
+            createdAt: typeof photoDoc.createdAt === 'number' 
+              ? photoDoc.createdAt 
+              : (photoDoc.createdAt as Timestamp).toMillis(),
+            uploaded: true,
+          };
+          
+          const dayPhotos = updated[photoItem.dateISO] || [];
+          
+          // 检查是否已存在（避免重复）
+          const exists = dayPhotos.some(p => p.id === photoItem.id);
+          if (!exists) {
+            // 添加到对应日期的数组头部
+            updated[photoItem.dateISO] = [photoItem, ...dayPhotos].slice(0, MAX_PHOTOS_PER_DAY);
+          }
+        });
+        
+        set({ dailyPhotos: updated });
+      },
+      
+      // 追加更早的照片（用于分页加载）
+      appendOlderPhotos: (photos) => {
+        const current = get().dailyPhotos;
+        const updated = { ...current };
+        
+        // 将 PhotoDoc 转换为 PhotoItem 并追加
+        photos.forEach(photoDoc => {
+          const photoItem: PhotoItem = {
+            id: photoDoc.id,
+            uri: photoDoc.url,
+            cloudUrl: photoDoc.url,
+            dateISO: photoDoc.dateISO,
+            createdAt: typeof photoDoc.createdAt === 'number' 
+              ? photoDoc.createdAt 
+              : (photoDoc.createdAt as Timestamp).toMillis(),
+            uploaded: true,
+          };
+          
+          const dayPhotos = updated[photoItem.dateISO] || [];
+          
+          // 检查是否已存在
+          const exists = dayPhotos.some(p => p.id === photoItem.id);
+          if (!exists) {
+            // 追加到数组尾部
+            updated[photoItem.dateISO] = [...dayPhotos, photoItem];
+          }
+        });
+        
+        set({ dailyPhotos: updated });
+      },
+      
+      // 设置是否还有更多历史
+      setHasMoreHistory: (hasMore) => {
+        set({ hasMoreHistory: hasMore });
+      },
+      
+      // 更新上次同步时间
+      updateLastSyncTime: (time) => {
+        set({ lastSyncTime: time });
       },
     }),
     { name: 'skiri-store', storage: createJSONStorage(() => AsyncStorage) }

@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 临时路径：调试期间使用（允许所有已认证用户上传）
+    match /temp/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null 
+                         && request.auth.uid == userId;
+    }
+    
+    // 用户照片：每个用户只能访问自己的文件（包括匿名用户）
+    match /users/{userId}/photos/{allPaths=**} {
+      allow read, write: if request.auth != null 
+                         && request.auth.uid == userId;
+    }
+  }
+}
+
+
+
+
+
+
+
+
